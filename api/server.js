@@ -14,16 +14,57 @@ const cors = require("cors");
   The session can be persisted in memory (would not be adecuate for production)
   or you can use a session store like `connect-session-knex`.
  */
+const path = require('path')
+const session = require('express-session');
+const KnexSessionStore = require('connect-session-knex')(session);
+
+const usersRouter = require('./users/users-router.js');
+const authRouter = require('./auth/auth-router.js');
 
 const server = express();
+
+const sessionConfig ={
+  name: 'chocolatechip',
+  secret: 'ILAEFBiulWAFYVIsvyeif',
+  cookie: {
+    maxAge: 1000 * 60 * 2, //how long it takes to expire
+    secure: false,
+    httpOnly:true,
+  },
+  resave: false,
+  saveUninitialized: false,
+
+  store: new KnexSessionStore({
+    knex: require('../data/db-config'),
+    tablename: 'sessions',
+    sidfieldname: 'sid',
+    createtable: true,
+    clearInterval: 1000 * 60 * 60, //when the store gets cleared, how long session id will be there for, cancels a repeating action
+  })
+}
+
+server.use(session(sessionConfig));
+
+server.use(express.static(path.join(__dirname, '../client')))
 
 server.use(helmet());
 server.use(express.json());
 server.use(cors());
 
-server.get("/", (req, res) => {
-  res.json({ api: "up" });
-});
+server.use('/api/users', usersRouter)
+server.use('/api/auth', authRouter)
+
+// server.get("/", (req, res) => {
+//   res.json({ api: "up" });
+// });
+
+server.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client', 'index.html'))
+})
+
+server.use('*', (req, res, next) => {
+  next({ status: 404, message: 'not found!' })
+})
 
 server.use((err, req, res, next) => { // eslint-disable-line
   res.status(err.status || 500).json({
